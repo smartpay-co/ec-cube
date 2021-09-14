@@ -155,6 +155,20 @@ class PaymentController extends AbstractShoppingController
             $publicKey = getenv('SMARTPAY_PUBLIC_KEY');
             $secretKey = getenv('SMARTPAY_SECRET_KEY');
             $url = "{$this->config->getAPIPrefix()}/checkout/sessions";
+            $lineItems = array_map($transformProductItems, $Order->getProductOrderItems());
+            if ($Order->getDeliveryFeeTotal() > 0) {
+                $lineItems[count($lineItems)] = [
+                    'priceData' => [
+                        'productData' => [
+                            'name' => '配送手数料',
+                        ],
+                        'amount' => $Order->getDeliveryFeeTotal(),
+                        'currency' => 'JPY',
+                    ],
+                    'quantity' => 1,
+                ];
+            }
+
             $data = [
                 'successUrl' => $successURL,
                 'cancelUrl' => $cancelURL,
@@ -162,9 +176,9 @@ class PaymentController extends AbstractShoppingController
                     "emailAddress" => $Order->getEmail(),
                 ],
                 'orderData' => [
-                    'amount' => $Order->getTotalPrice() - $Order->getDeliveryFeeTotal(),
+                    'amount' => $Order->getTotalPrice(),
                     'currency' => $Order->getCurrencyCode(),
-                    'lineItemData' => array_map($transformProductItems, $Order->getProductOrderItems()),
+                    'lineItemData' => $lineItems,
                     'shippingInfo' => [
                         'address' =>  [
                             'line1' => 'line1',
