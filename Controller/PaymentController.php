@@ -122,66 +122,86 @@ class PaymentController extends AbstractShoppingController
             return $this->redirectToRoute('shopping_error');
         }
 
+        // Build redirect URL params
+        $successURL = getenv('SMARTPAY_SUCCESS_URL');
+        $cancelURL = getenv('SMARTPAY_CANCEL_URL');
+
+        if (!$successURL || !$cancelURL) {
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+            $successURL = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/complete/{$Order->getId()}";
+            $cancelURL = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/cancel/{$Order->getId()}"; 
+        }
+
+        // Build request body
+        $transformProductItems = function($product)
+        {
+            $description = "{$product->getClassCategoryName1()}{$product->getClassCategoryName2()}";
+            return [
+                'priceData' => [
+                    'productData' => [
+                        'name' => $product->getProductName(),
+                    ] + (empty($description) ? [] : [
+                        'description' => $description
+                    ]),
+                    'amount' => $product->getTotalPrice(),
+                    'currency' => $product->getCurrencyCode(),
+                ],
+                'quantity' => $product->getQuantity(),
+            ];
+        };
+
+
         try {
             $publicKey = getenv('SMARTPAY_PUBLIC_KEY');
-            // $secretKey = getenv('SMARTPAY_SECRET_KEY');
-            // $url = "{$this->config->getAPIPrefix()}/sessions";
-            // $data = array('lineItems' => array(
-            //     array(
-            //         'name' => 'レブロン 18 LOW',
-            //         'price' => 19250,
-            //         'currency' => 'JPY',
-            //         'quantity' => 1,
-            //     ),
-            //     array(
-            //         'name' => 'レブロン 20 LOW',
-            //         'price' => 60523,
-            //         'currency' => 'JPY',
-            //         'quantity' => 2,
-            //     )
-            // ));
-            // $options = array(
-            //   'http' => array(
-            //       'header'  => array(
-            //         "Accept: application/json\r\n",
-            //         "Authorization: Bearer {$secretKey}\r\n",
-            //         "Content-type: application/json\r\n\r\n"
-            //       ),
-            //       'method'  => 'POST',
-            //       'content' => http_build_query($data)
-            //   )
-            // );
+            $secretKey = getenv('SMARTPAY_SECRET_KEY');
+            $url = "{$this->config->getAPIPrefix()}/checkout/sessions";
+            $data = [
+                'successUrl' => $successURL,
+                'cancelUrl' => $cancelURL,
+                'customerInfo' => [
+                    "emailAddress" => $Order->getEmail(),
+                ],
+                'orderData' => [
+                    'amount' => $Order->getTotalPrice() - $Order->getDeliveryFeeTotal(),
+                    'currency' => $Order->getCurrencyCode(),
+                    'lineItemData' => array_map($transformProductItems, $Order->getProductOrderItems()),
+                    'shippingInfo' => [
+                        'address' =>  [
+                            'line1' => 'line1',
+                            'locality' => 'locality',
+                            'postalCode' => '123',
+                            'country' => 'JP'
+                        ],
+                    ],
+                ],
+            ];
 
-            // $context  = stream_context_create($options);
-            // $checkoutSession = file_get_contents($url, false, $context);
-            // if ($checkoutSession === false) { 
-            //   $this->addError($e->getMessage());
-            //   return $this->redirectToRoute('shopping_error');
-            // }
-
-            // @TODO: temporarily since the sessions API is not ready
-            $checkoutSession = array('id' => 'session_id_1');
-            $sessionID = $checkoutSession['id'];
-
-            // Memorize checkout id
-            $Order->setSmartpayPaymentCheckoutID($sessionID);
-
-            // Build redirect URL params
-            $successURL = getenv('SMARTPAY_SUCCESS_URL');
-            $cancelURL = getenv('SMARTPAY_CANCEL_URL');
-
-            if (!$successURL || !$cancelURL) {
-                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-                $successURL = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/complete";
-                $cancelURL = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/cancel";    
+            function httpPost($url, $data){
+                $secretKey = getenv('SMARTPAY_SECRET_KEY');
+                $curl = curl_init($url);
+                $authorization = "Authorization: Basic {$secretKey}";
+                curl_setopt($curl, CURLOPT_POST, true);
+                curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
+                curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+                    'Accept: application/json',
+                    'Content-Type: application/json' ,
+                    $authorization
+                ));
+                curl_setopt($curl, CURLOPT_ENCODING, 'gzip,deflate,sdch');
+                $response = curl_exec($curl);
+                curl_close($curl);
+                return json_decode($response, true);
             }
 
-            $params = "session={$sessionID}&key={$publicKey}&success_url={$successURL}/{$Order->getId()}&cancel_url={$cancelURL}/{$Order->getId()}";
+            $checkoutSession = httpPost($url, $data);
+            $sessionID = $checkoutSession['id'];
+            $Order->setSmartpayPaymentCheckoutID($sessionID);
+            $params = "session_id={$sessionID}";
 
-            header("Location: {$this->config->getCheckoutURL()}/login?{$params}");
+            header("Location: http://localhost:3000/login?session_id={$sessionID}");
             exit;
         } catch (\Exception $e) {
-            $this->rollbackOrder($Order);
             $this->addError($e->getMessage());
             return $this->redirectToRoute('shopping_error');
         }
