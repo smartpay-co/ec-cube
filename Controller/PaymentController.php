@@ -215,7 +215,7 @@ class PaymentController extends AbstractShoppingController
             $Order->setSmartpayPaymentCheckoutID($sessionID);
             $params = "session_id={$sessionID}";
 
-            header("Location: http://localhost:3000/login?session_id={$sessionID}");
+            header("Location: {$this->config->getCheckoutURL()}/login?session_id={$sessionID}");
             exit;
         } catch (\Exception $e) {
             $this->addError($e->getMessage());
