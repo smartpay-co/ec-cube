@@ -64,8 +64,8 @@ class PluginManager extends AbstractPluginManager
 
         $Config = new Config();
         $Config->setApiId('smartpay-api-id');
-        $Config->setAPIPrefix('https://api.smartpay.re/smartpayments');
-        $Config->setCheckoutURL('https://checkout.smartpay.ninja');
+        $Config->setAPIPrefix(env('SMARTPAY_API_URL') ?: 'https://api.smartpay.re/smartpayments');
+        $Config->setCheckoutURL(env('SMARTPAY_CHECKOUT_URL') ?: 'https://checkout.smartpay.re');
 
         $entityManager->persist($Config);
         $entityManager->flush($Config);
