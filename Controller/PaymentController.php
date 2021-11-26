@@ -161,6 +161,17 @@ class PaymentController extends AbstractShoppingController
                 'cancelUrl' => $cancelURL,
                 'customerInfo' => [
                     "emailAddress" => $Order->getEmail(),
+                    "firstName" => $Order->getName02(),
+                    "lastName" => $Order->getName01(),
+                    "firstNameKana" => $Order->getKana02(),
+                    "lastNameKana" => $Order->getKana01(),
+                    "phoneNumber" => preg_replace("/^0/", "+81", $Order->getPhoneNumber()),
+                    "address" => [
+                        "postalCode" => $Order->getPostalCode(),
+                        "country" => "JP",
+                        "line1" => "",
+                        "locality" => "",
+                    ],
                 ],
                 'orderData' => [
                     'amount' => $Order->getTotalPrice(),
