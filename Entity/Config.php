@@ -30,13 +30,6 @@ if (!class_exists('\Plugin\Smartpay\Entity\Config', false)) {
         private $api_prefix;
 
         /**
-         * @var string
-         *
-         * @ORM\Column(name="checkout_url", type="string", length=255)
-         */
-        private $checkout_url;
-
-        /**
          * @return int
          */
         public function getId()
