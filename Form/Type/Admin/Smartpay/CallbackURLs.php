@@ -25,14 +25,12 @@ class CallbackURLs extends AbstractType
     {
         $builder
             ->add('success_url', TextType::class, [
-                'constraints' => [
-                    new NotBlank()
-                ]
+                'required' => false,
+                'constraints' => []
             ])
             ->add('cancel_url', TextType::class, [
-                'constraints' => [
-                    new NotBlank()
-                ]
-                ]);
+                'required' => false,
+                'constraints' => []
+            ]);
     }
 }

@@ -23,16 +23,14 @@
                         <div class="card-header"><span>{{ 'smartpay.admin.config.header'|trans }}</span></div>
                         <div class="card-body">
                             <div class="row">
-                                <div class="col-3"><span>{{ 'サクセスURL'|trans }}</span><span
-                                        class="badge badge-primary ml-1">{{ 'smartpay.admin.config.required'|trans }}</span></div>
+                                <div class="col-3"><span>{{ 'サクセスURL'|trans }}</span></div>
                                 <div class="col mb-2">
                                     {{ form_widget(form.success_url) }}
                                     {{ form_errors(form.success_url) }}
                                 </div>
                             </div>
                             <div class="row">
-                                <div class="col-3"><span>{{ 'キャンセルURL'|trans }}</span><span
-                                        class="badge badge-primary ml-1">{{ 'smartpay.admin.config.required'|trans }}</span></div>
+                                <div class="col-3"><span>{{ 'キャンセルURL'|trans }}</span></div>
                                 <div class="col mb-2">
                                     {{ form_widget(form.cancel_url) }}
                                     {{ form_errors(form.cancel_url) }}
