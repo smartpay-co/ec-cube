@@ -1,6 +1,8 @@
 # Smartpay for EC-CUBE4
 
-This is a plug-in that allows you to make credit card payments with Smartpay on EC-CUBE4
+This is a plug-in that allows you to make credit card payments with Smartpay on EC-CUBE 4.0 & 4.1
+
+For EC-CUBE 4.2, please refer to https://github.com/smartpay-co/smartpay-ec-cube42
 
 # Installation and activation
 
