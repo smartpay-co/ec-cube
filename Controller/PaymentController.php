@@ -247,9 +247,8 @@ class PaymentController extends AbstractShoppingController
             $checkoutSession = httpPost($url, $data);
             $sessionID = $checkoutSession['id'];
             $Order->setSmartpayPaymentCheckoutID($sessionID);
-
-            header("Location: {$checkoutSession['url']}");
-            exit;
+            $this->entityManager->flush();
+            return $this->redirect($checkoutSession['url']);
         } catch (\Exception $e) {
             $this->addError($e->getMessage());
             return $this->redirectToRoute('shopping_error');
