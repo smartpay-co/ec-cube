@@ -275,12 +275,13 @@ class PaymentController extends AbstractShoppingController
 
             $OrderStatus = $this->orderStatusRepository->find(OrderStatus::NEW);
             $Order->setOrderStatus($OrderStatus);
-
-            $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::PROVISIONAL_SALES);
+            $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::ACTUAL_SALES);
             $Order->setSmartpayPaymentStatus($PaymentStatus);
 
             $this->purchaseFlow->commit($Order, new PurchaseContext());
             $this->completeShopping($Order);
+            $PaidOrderStatus = $this->orderStatusRepository->find(OrderStatus::PAID);
+            $this->orderRepository->changeStatus($Order->getId(), $PaidOrderStatus);
 
             return $this->redirectToRoute('shopping_complete');
         } catch (\Exception $e) {
