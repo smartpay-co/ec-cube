@@ -6,11 +6,16 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class Event implements EventSubscriberInterface
 {
+    public function onCancel($event)
+    {
+        $Order = $event->getSubject()->getOrder();
+    }
+
     /**
-     * @return array
+     * {@inheritdoc}
      */
     public static function getSubscribedEvents()
     {
-        return [];
+        return ['workflow.order.transition.cancel' => 'onCancel'];
     }
 }
