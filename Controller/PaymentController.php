@@ -24,6 +24,7 @@ use Eccube\Service\CartService;
 use Eccube\Service\MailService;
 use Eccube\Service\OrderHelper;
 use Eccube\Service\PurchaseFlow\PurchaseContext;
+use Plugin\Smartpay\Client;
 use Plugin\Smartpay\Entity\Config;
 use Plugin\Smartpay\Entity\PaymentStatus;
 use Plugin\Smartpay\Repository\ConfigRepository;
@@ -83,6 +84,11 @@ class PaymentController extends AbstractShoppingController
      */
     private $parameterBag;
 
+    /**
+     * @var Client
+     */
+    private $client;
+
     public function __construct(
         CartService $cartService,
         OrderHelper $orderHelper,
@@ -103,6 +109,7 @@ class PaymentController extends AbstractShoppingController
         $this->paymentStatusRepository = $paymentStatusRepository;
         $this->config = $configRepository->get();
         $this->parameterBag = $parameterBag;
+        $this->client = new Client(null, null, $this->config->getAPIPrefix());
     }
 
     /**
@@ -171,9 +178,7 @@ class PaymentController extends AbstractShoppingController
                 return null;
             }
         };
-
         try {
-            $url = "{$this->config->getAPIPrefix()}/checkout-sessions";
             $orderItems = $Order->getOrderItems()->getValues();
             // Sort by \Eccube\Entity\Master\OrderItemType so Product appears before of Charge
             usort($orderItems, function ($a, $b) {
@@ -217,39 +222,17 @@ class PaymentController extends AbstractShoppingController
                 $data['shippingInfo']['feeCurrency'] = $Order->getCurrencyCode();
             }
 
-            function httpPost($url, $data)
-            {
-                $secretKey = getenv('SMARTPAY_SECRET_KEY');
-                $curl = curl_init($url);
-                $authorization = "Authorization: Basic {$secretKey}";
-                curl_setopt($curl, CURLOPT_POST, true);
-                curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
-                curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($curl, CURLOPT_HTTPHEADER, array(
-                    'Accept: application/json',
-                    'Content-Type: application/json',
-                    $authorization
-                ));
-                curl_setopt($curl, CURLOPT_ENCODING, 'gzip,deflate,sdch');
-                $response = curl_exec($curl);
-                $httpcode = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-                curl_close($curl);
-                if ($httpcode != 200) {
-                    log_error("[Smartpay] POST ${url} ${httpcode}", array(
-                        'payload' => $data,
-                        'response' => $response
-                    ));
-                    throw new \Exception("システム管理者に連絡してください");
-                }
-                return json_decode($response, true);
-            }
 
-            $checkoutSession = httpPost($url, $data);
+
+            $checkoutSession = $this->client->httpPost("/checkout-sessions", $data);
             $sessionID = $checkoutSession['id'];
             $Order->setSmartpayPaymentCheckoutID($sessionID);
             $this->entityManager->flush();
             return $this->redirect($checkoutSession['url']);
         } catch (\Exception $e) {
+            log_error('create checkoutSession error',
+                [ 'stacktrace' => $e->getTraceAsString(), 'msg' => $e->getMessage()]
+            );
             $this->addError($e->getMessage());
             return $this->redirectToRoute('shopping_error');
         }
@@ -266,21 +249,33 @@ class PaymentController extends AbstractShoppingController
         try {
             $Order = $this->orderRepository->findOneBy([
                 'id' => $id,
+                'SmartpayPaymentStatus' => PaymentStatus::ENABLED
             ]);
 
             if (null === $Order) {
+                log_error("Order {$id} with smartpay_payment_status = 2 not found");
+                $this->addError('受注情報が存在しません');
+                return $this->redirectToRoute('shopping_error');
+            }
+
+            // Check if the payment is actually authorized
+            $checkoutSessionID = $Order->getSmartpayPaymentCheckoutID();
+            $checkoutSession = $this->client->httpGet("/checkout-sessions/{$checkoutSessionID}?expand=all");
+            if ($checkoutSession['order']['status'] != 'succeeded') {
+                log_error("Order {$id} found, but Smartpay order status is {$checkoutSession['order']['status']}");
                 $this->addError('受注情報が存在しません');
                 return $this->redirectToRoute('shopping_error');
             }
 
             $OrderStatus = $this->orderStatusRepository->find(OrderStatus::NEW);
             $Order->setOrderStatus($OrderStatus);
-
-            $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::PROVISIONAL_SALES);
+            $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::ACTUAL_SALES);
             $Order->setSmartpayPaymentStatus($PaymentStatus);
 
             $this->purchaseFlow->commit($Order, new PurchaseContext());
             $this->completeShopping($Order);
+            $PaidOrderStatus = $this->orderStatusRepository->find(OrderStatus::PAID);
+            $this->orderRepository->changeStatus($Order->getId(), $PaidOrderStatus);
 
             return $this->redirectToRoute('shopping_complete');
         } catch (\Exception $e) {
@@ -339,4 +334,6 @@ class PaymentController extends AbstractShoppingController
         $this->purchaseFlow->rollback($Order, new PurchaseContext());
         $this->entityManager->flush();
     }
+
+
 }
