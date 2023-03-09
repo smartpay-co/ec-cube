@@ -53,7 +53,10 @@ class Event implements EventSubscriberInterface
                 return;
             }
 
-            // Refund
+	    // Refund
+	    // We only to automatic capture when checkout, so we just refund the first payment here.
+	    // We might need to handle cancel smartpay order & refund multiple payments here 
+	    // if we support manual capture in the future.
             $data = [
                 'amount' => $checkoutSession['order']['amount'],
                 'currency' => $checkoutSession['order']['currency'],
