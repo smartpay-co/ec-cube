@@ -35,6 +35,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Config\Definition\Exception\Exception;
 
 /**
  * Class SmartpayController
@@ -137,48 +138,48 @@ class PaymentController extends AbstractShoppingController
             $successUrl = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/complete/{$Order->getId()}";
             $cancelUrl = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/cancel/{$Order->getId()}";
         }
-
-        // Build request body
-        $transformItems = function ($item) {
-            if ($item->isDiscount()) {
-                return [
-                    'kind' => 'discount',
-                    'name' => 'Discount',
-                    'amount' => -1 * $item->getPriceIncTax(),
-                    'currency' => $item->getCurrencyCode(),
-                ];
-            } else if ($item->isPoint()) {
-                return [
-                    'kind' => 'discount',
-                    'name' => 'Point',
-                    'amount' => -1 * $item->getPriceIncTax(),
-                    'currency' => $item->getCurrencyCode(),
-                ];
-            } else if ($item->isTax()) {
-                return [
-                    'kind' => 'tax',
-                    'name' => 'Tax',
-                    'amount' => $item->getPriceIncTax(),
-                    'currency' => $item->getCurrencyCode(),
-                ];
-            } else if ($item->isDeliveryFee()) {
-                return null;
-            } else if ($item->isProduct() || $item->isCharge()) {
-                $description = "{$item->getClassCategoryName1()}{$item->getClassCategoryName2()}";
-                return [
-                    'name' => $item->getProductName() ?: 'Item',
-                    'amount' => $item->getPriceIncTax(),
-                    'currency' => $item->getCurrencyCode(),
-                    'quantity' => $item->getQuantity(),
-                ] + (empty($description) ? [] : [
-                    'productDescription' => $description
-                ]);
-            } else {
-                log_error("Unhandled item type: {$item->getOrderItemType()}");
-                return null;
-            }
-        };
         try {
+            // Build request body
+            $transformItems = function ($item) {
+                if ($item->isDiscount()) {
+                    return [
+                        'kind' => 'discount',
+                        'name' => 'Discount',
+                        'amount' => -1 * $item->getPriceIncTax(),
+                        'currency' => $item->getCurrencyCode(),
+                    ];
+                } else if ($item->isPoint()) {
+                    return [
+                        'kind' => 'discount',
+                        'name' => 'Point',
+                        'amount' => -1 * $item->getPriceIncTax(),
+                        'currency' => $item->getCurrencyCode(),
+                    ];
+                } else if ($item->isTax()) {
+                    return [
+                        'kind' => 'tax',
+                        'name' => 'Tax',
+                        'amount' => $item->getPriceIncTax(),
+                        'currency' => $item->getCurrencyCode(),
+                    ];
+                } else if ($item->isDeliveryFee()) {
+                    return null;
+                } else if ($item->isProduct() || $item->isCharge()) {
+                    $description = "{$item->getClassCategoryName1()}{$item->getClassCategoryName2()}";
+                    return [
+                        'name' => $item->getProductName() ?: 'Item',
+                        'amount' => $item->getPriceIncTax(),
+                        'currency' => $item->getCurrencyCode(),
+                        'quantity' => $item->getQuantity(),
+                    ] + (empty($description) ? [] : [
+                        'productDescription' => $description
+                    ]);
+                } else {
+                    log_error("Unhandled item type: {$item->getOrderItemType()}");
+                    return null;
+                }
+            };
+
             $orderItems = $Order->getOrderItems()->getValues();
             // Sort by \Eccube\Entity\Master\OrderItemType so Product appears before of Charge
             usort($orderItems, function ($a, $b) {
@@ -233,6 +234,7 @@ class PaymentController extends AbstractShoppingController
             log_error('create checkoutSession error',
                 [ 'stacktrace' => $e->getTraceAsString(), 'msg' => $e->getMessage()]
             );
+            $this->cancelShopping($Order);
             $this->addError($e->getMessage());
             return $this->redirectToRoute('shopping_error');
         }
@@ -274,8 +276,6 @@ class PaymentController extends AbstractShoppingController
 
             $this->purchaseFlow->commit($Order, new PurchaseContext());
             $this->completeShopping($Order);
-            $PaidOrderStatus = $this->orderStatusRepository->find(OrderStatus::PAID);
-            $this->orderRepository->changeStatus($Order->getId(), $PaidOrderStatus);
 
             return $this->redirectToRoute('shopping_complete');
         } catch (\Exception $e) {
@@ -301,9 +301,6 @@ class PaymentController extends AbstractShoppingController
                 $this->addError('受注情報が存在しません');
                 return $this->redirectToRoute('shopping_error');
             }
-
-            $OrderStatus = $this->orderStatusRepository->find(OrderStatus::PROCESSING);
-            $Order->setOrderStatus($OrderStatus);
 
             $this->addError('Smartpay決済がキャンセルされました');
             $this->cancelShopping($Order);
@@ -331,6 +328,9 @@ class PaymentController extends AbstractShoppingController
      */
     protected function cancelShopping(Order $Order)
     {
+        $OrderStatus = $this->orderStatusRepository->find(OrderStatus::PROCESSING);
+        $Order->setOrderStatus($OrderStatus);
+
         $this->purchaseFlow->rollback($Order, new PurchaseContext());
         $this->entityManager->flush();
     }
