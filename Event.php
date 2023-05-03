@@ -6,7 +6,7 @@ use Plugin\Smartpay\Entity\PaymentStatus;
 use Plugin\Smartpay\Repository\ConfigRepository;
 use Plugin\Smartpay\Repository\PaymentStatusRepository;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\EntityManagerInterface;
 
 class Event implements EventSubscriberInterface
 {
@@ -16,7 +16,7 @@ class Event implements EventSubscriberInterface
     private $config;
     private $client;
 
-    public function __construct(EntityManager $entityManager, PaymentStatusRepository $paymentStatusRepository,ConfigRepository $configRepository)
+    public function __construct(EntityManagerInterface $entityManager, PaymentStatusRepository $paymentStatusRepository,ConfigRepository $configRepository)
     {
         $this->entityManager = $entityManager;
         $this->paymentStatusRepository = $paymentStatusRepository;
