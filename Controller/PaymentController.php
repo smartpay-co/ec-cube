@@ -134,9 +134,8 @@ class PaymentController extends AbstractShoppingController
         $cancelUrl = getenv('SMARTPAY_CANCEL_URL');
 
         if (!$successUrl || !$cancelUrl) {
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-            $successUrl = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/complete/{$Order->getId()}";
-            $cancelUrl = "{$protocol}{$_SERVER['HTTP_HOST']}/shopping/smartpay/payment/cancel/{$Order->getId()}";
+            $successUrl = $this->generateUrl('shopping_smartpay_payment_complete', ['id' => $Order->getId()], UrlGeneratorInterface::ABSOLUTE_URL);
+            $cancelUrl = $this->generateUrl('shopping_smartpay_payment_cancel', ['id' => $Order->getId()], UrlGeneratorInterface::ABSOLUTE_URL);
         }
         try {
             // Build request body
@@ -235,6 +234,50 @@ class PaymentController extends AbstractShoppingController
                 [ 'stacktrace' => $e->getTraceAsString(), 'msg' => $e->getMessage()]
             );
             $this->cancelShopping($Order);
+            $this->addError($e->getMessage());
+            return $this->redirectToRoute('shopping_error');
+        }
+    }
+
+    /**
+     * @return RedirectResponse
+     * @throws \Smartpay\Exception\ApiErrorException
+     *
+     * @Route("/payment/webhook", name="shopping_smartpay_payment_webhook")
+     */
+    public function paymentWebhook(): RedirectResponse
+    {
+        try {
+            // $Order = $this->orderRepository->findOneBy([
+            //     'id' => $id,
+            //     'SmartpayPaymentStatus' => PaymentStatus::ENABLED
+            // ]);
+
+            // if (null === $Order) {
+            //     log_error("Order {$id} with smartpay_payment_status = 2 not found");
+            //     $this->addError('受注情報が存在しません');
+            //     return $this->redirectToRoute('shopping_error');
+            // }
+
+            // // Check if the payment is actually authorized
+            // $checkoutSessionID = $Order->getSmartpayPaymentCheckoutID();
+            // $checkoutSession = $this->client->httpGet("/checkout-sessions/{$checkoutSessionID}?expand=all");
+            // if ($checkoutSession['order']['status'] != 'succeeded') {
+            //     log_error("Order {$id} found, but Smartpay order status is {$checkoutSession['order']['status']}");
+            //     $this->addError('受注情報が存在しません');
+            //     return $this->redirectToRoute('shopping_error');
+            // }
+
+            // $OrderStatus = $this->orderStatusRepository->find(OrderStatus::NEW);
+            // $Order->setOrderStatus($OrderStatus);
+            // $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::ACTUAL_SALES);
+            // $Order->setSmartpayPaymentStatus($PaymentStatus);
+
+            // $this->purchaseFlow->commit($Order, new PurchaseContext());
+            // $this->completeShopping($Order);
+
+            return $this->redirectToRoute('shopping_complete');
+        } catch (\Exception $e) {
             $this->addError($e->getMessage());
             return $this->redirectToRoute('shopping_error');
         }
