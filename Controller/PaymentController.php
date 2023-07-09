@@ -29,6 +29,7 @@ use Plugin\Smartpay\Entity\Config;
 use Plugin\Smartpay\Entity\PaymentStatus;
 use Plugin\Smartpay\Repository\ConfigRepository;
 use Plugin\Smartpay\Repository\PaymentStatusRepository;
+use Plugin\Smartpay\Util\Base62;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ParameterBag;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -36,6 +37,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Config\Definition\Exception\Exception;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 /**
  * Class SmartpayController
@@ -240,13 +242,46 @@ class PaymentController extends AbstractShoppingController
     }
 
     /**
-     * @return RedirectResponse
+     * @return JsonResponse
      * @throws \Smartpay\Exception\ApiErrorException
      *
-     * @Route("/payment/webhook", name="shopping_smartpay_payment_webhook")
+     * @Route("/payment/webhook", name="shopping_smartpay_payment_webhook", methods={"POST"}))
      */
-    public function paymentWebhook(): RedirectResponse
+    public function paymentWebhook(Request $request): JsonResponse
     {
+        $webhookId = getenv('SMARTPAY_WEBHOOK_ID'); 
+        $signingSecret  = getenv('SMARTPAY_WEBHOOK_SECRET');
+        if (empty($webhookId) || empty($signingSecret)) {
+            log_info("[Smartpay Webhook] signing id or secret not found, skipping...");
+            return new JsonResponse(['error' => 'Smartpay webhook is not setup yet.'], 200);
+        }
+
+        $req_signature  = $request->headers->get('Smartpay-Signature');
+        $req_timestamp  = $request->headers->get('Smartpay-Signature-Timestamp');
+        $req_webhook_id = $request->headers->get('Smartpay-Subscription-Id');
+        $req_event_id   = $request->headers->get('Smartpay-Event-Id');
+        
+        if (empty($req_signature) || empty($req_timestamp) || empty($req_webhook_id) || empty($req_event_id)) {
+            log_info("[Smartpay Webhook] invalid headers, skipping...");
+            return new JsonResponse(['error' => 'Smartpay webhook headers missing.'], 400);
+        }
+        log_info("[Smartpay Webhook] {$req_webhook_id} received event {$req_event_id}");
+
+        if ($req_webhook_id !== $webhookId) {
+            log_info("[Smartpay Webhook] webhook id mismatch, skipping...");
+            return new JsonResponse(['error' => 'Smartpay webhook id mismatch.'], 400);
+        }
+
+        $payload = $request->request->all();
+
+        // validate request signature
+        if (!$this->validateSignature($signingSecret, $req_signature, $req_timestamp, $request->getContent())) {
+            log_info("[Smartpay Webhook] invalid signature, skipping...");
+            return new JsonResponse(['error' => 'Invalid Smartpay webhook signature.'], 400);
+        } else {
+            log_info("[Smartpay Webhook] signature validated");
+            return new JsonResponse(['success' => 'Smartpay webhook signature validated.'], 200);
+        }
         try {
             // $Order = $this->orderRepository->findOneBy([
             //     'id' => $id,
@@ -378,5 +413,24 @@ class PaymentController extends AbstractShoppingController
         $this->entityManager->flush();
     }
 
+    /**
+     * validateSignature validates the signature of the webhook request
+     * 
+     * @param string $signingSecret
+     * @param string $signature
+     * @param string $timestamp
+     * @param string $body
+     * @return bool
+     */
+    private function validateSignature(string $signingSecret, string $signature, string $timestamp, string $body): bool
+    {
+        $base62 = new Base62(["characters" => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789']);
+        $calculatedSignature = hash_hmac('sha256', $timestamp . "." . $body, $base62->decode($signingSecret));
+        if ($calculatedSignature == $signature) {
+            return true;
+        }
+
+        return false;
+    }
 
 }
