@@ -249,6 +249,7 @@ class PaymentController extends AbstractShoppingController
      */
     public function paymentWebhook(Request $request): JsonResponse
     {
+        // Check if webhook is setup
         $webhookId = getenv('SMARTPAY_WEBHOOK_ID'); 
         $signingSecret  = getenv('SMARTPAY_WEBHOOK_SECRET');
         if (empty($webhookId) || empty($signingSecret)) {
@@ -256,6 +257,7 @@ class PaymentController extends AbstractShoppingController
             return new JsonResponse(['error' => 'Smartpay webhook is not setup yet.'], 200);
         }
 
+        // Check if webhook request is valid
         $req_signature  = $request->headers->get('Smartpay-Signature');
         $req_timestamp  = $request->headers->get('Smartpay-Signature-Timestamp');
         $req_webhook_id = $request->headers->get('Smartpay-Subscription-Id');
@@ -269,52 +271,76 @@ class PaymentController extends AbstractShoppingController
 
         if ($req_webhook_id !== $webhookId) {
             log_info("[Smartpay Webhook] webhook id mismatch, skipping...");
-            return new JsonResponse(['error' => 'Smartpay webhook id mismatch.'], 400);
+            return new JsonResponse(['error' => 'Smartpay webhook id mismatch.'], 200);
         }
-
-        $payload = $request->request->all();
 
         // validate request signature
         if (!$this->validateSignature($signingSecret, $req_signature, $req_timestamp, $request->getContent())) {
             log_info("[Smartpay Webhook] invalid signature, skipping...");
-            return new JsonResponse(['error' => 'Invalid Smartpay webhook signature.'], 400);
-        } else {
-            log_info("[Smartpay Webhook] signature validated");
-            return new JsonResponse(['success' => 'Smartpay webhook signature validated.'], 200);
+            return new JsonResponse(['error' => 'Invalid Smartpay webhook signature.'], 200);
         }
+        log_info("[Smartpay Webhook] signature validated");
+
+        $payload = json_decode($request->getContent(), true);
+        $smartpayOrderId = $payload['eventData']['data']['id'];
+        log_info("[Smartpay Webhook] smartpayOrderId", ['smartpayOrderId' => $smartpayOrderId]);
+        
+        // Handle order logic
         try {
-            // $Order = $this->orderRepository->findOneBy([
-            //     'id' => $id,
-            //     'SmartpayPaymentStatus' => PaymentStatus::ENABLED
-            // ]);
+            // Get Smartpay Order
+            $smartpayOrder = $this->client->httpGet("/orders/{$smartpayOrderId}");
 
-            // if (null === $Order) {
-            //     log_error("Order {$id} with smartpay_payment_status = 2 not found");
-            //     $this->addError('受注情報が存在しません');
-            //     return $this->redirectToRoute('shopping_error');
-            // }
+            // Check if the order is paid
+            $id = $smartpayOrder['reference'];
+            if ($smartpayOrder['status'] != 'succeeded') {
+                log_error("[Smartpay Webhook] Smartpay order status is {$smartpayOrder['status']}, skipping...");
+                return new JsonResponse(['error' => 'Smartpay order status is not correct.'], 200);
+            }
+            
+            // Find the order in ECCUBE using reference field
+            $Order = $this->orderRepository->findOneBy([
+                'id' => $id
+            ]);
 
-            // // Check if the payment is actually authorized
-            // $checkoutSessionID = $Order->getSmartpayPaymentCheckoutID();
-            // $checkoutSession = $this->client->httpGet("/checkout-sessions/{$checkoutSessionID}?expand=all");
-            // if ($checkoutSession['order']['status'] != 'succeeded') {
-            //     log_error("Order {$id} found, but Smartpay order status is {$checkoutSession['order']['status']}");
-            //     $this->addError('受注情報が存在しません');
-            //     return $this->redirectToRoute('shopping_error');
-            // }
+            // Check if the order exists
+            if (null === $Order) {
+                log_error("[Smartpay Webhook] Order {$id} not found, skipping...");
+                return new JsonResponse(['error' => 'ECCUBE order not found.'], 200);
+            }
 
-            // $OrderStatus = $this->orderStatusRepository->find(OrderStatus::NEW);
-            // $Order->setOrderStatus($OrderStatus);
-            // $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::ACTUAL_SALES);
-            // $Order->setSmartpayPaymentStatus($PaymentStatus);
+            // Check if the order waiting for payment
+            if ($Order->getSmartpayPaymentStatus()->getId() != PaymentStatus::ENABLED) {
+                log_error("[Smartpay Webhook] Order {$id} is not waiting for payment, skipping...");
+                return new JsonResponse(['error' => 'ECCUBE order is not waiting for payment.'], 200);
+            }
 
-            // $this->purchaseFlow->commit($Order, new PurchaseContext());
-            // $this->completeShopping($Order);
+            // Double check if the reference order is correct
+            $checkoutSessionID = $Order->getSmartpayPaymentCheckoutID();
+            $checkoutSession = $this->client->httpGet("/checkout-sessions/{$checkoutSessionID}?expand=all");
+            if ($checkoutSession['order']['id'] != $smartpayOrderId) {
+                log_error("[Smartpay Webhook ]Order {$id} found, but smartpayOrderId mismatch {$checkoutSession['order']['id']} <=> {$smartpayOrderId}");
+                return new JsonResponse(['error' => 'SmartpayOrderId mismatch.'], 200);
+            }
 
-            return $this->redirectToRoute('shopping_complete');
+            // Update order status
+            $OrderStatus = $this->orderStatusRepository->find(OrderStatus::NEW);
+            $Order->setOrderStatus($OrderStatus);
+            $PaymentStatus = $this->paymentStatusRepository->find(PaymentStatus::ACTUAL_SALES);
+            $Order->setSmartpayPaymentStatus($PaymentStatus);
+
+            // TODO: Need to find a way to clear user cart here.
+            $this->purchaseFlow->commit($Order, new PurchaseContext());
+            $this->mailService->sendOrderMail($Order);
+            $this->entityManager->flush();
+
+            log_info("[Smartpay webhook] Order {$id} processed successfully.");
+            return new JsonResponse(['success' => 'ok'], 200);
         } catch (\Exception $e) {
-            $this->addError($e->getMessage());
-            return $this->redirectToRoute('shopping_error');
+            log_error("[Smartpay webhook] Order {$id} process error", [
+                'stacktrace' => $e->getTraceAsString(),
+                'msg' => $e->getMessage()
+            ]);
+            return new JsonResponse(['success' => 'unknown exception'], 500);
         }
     }
 
