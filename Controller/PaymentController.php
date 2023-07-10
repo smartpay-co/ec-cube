@@ -336,7 +336,7 @@ class PaymentController extends AbstractShoppingController
             log_info("[Smartpay webhook] Order {$id} processed successfully.");
             return new JsonResponse(['success' => 'ok'], 200);
         } catch (\Exception $e) {
-            log_error("[Smartpay webhook] Order {$id} process error", [
+            log_error("[Smartpay webhook] SmartpayOrderId {$smartpayOrderId} process error", [
                 'stacktrace' => $e->getTraceAsString(),
                 'msg' => $e->getMessage()
             ]);
@@ -354,12 +354,26 @@ class PaymentController extends AbstractShoppingController
     {
         try {
             $Order = $this->orderRepository->findOneBy([
-                'id' => $id,
-                'SmartpayPaymentStatus' => PaymentStatus::ENABLED
+                'id' => $id
             ]);
 
             if (null === $Order) {
-                log_error("Order {$id} with smartpay_payment_status = 2 not found");
+                log_error("Order {$id} not found");
+                $this->addError('受注情報が存在しません');
+                return $this->redirectToRoute('shopping_error');
+            }
+
+            // Check order payment status
+            if ($Order->getSmartpayPaymentStatus()->getId() == PaymentStatus::ACTUAL_SALES ||
+                $Order->getSmartpayPaymentStatus()->getId() == PaymentStatus::PROVISIONAL_SALES) {
+                // Already paid (probably by webhook), redirect to order complete page
+                $this->cartService->clear();
+                $this->session->set(OrderHelper::SESSION_ORDER_ID, $Order->getId());
+                log_info("Order {$id} was found and paid, redirecting to order complete page");
+                return $this->redirectToRoute('shopping_complete');
+            } else if ($Order->getSmartpayPaymentStatus()->getId() != PaymentStatus::ENABLED) {
+                // Not waiting for payment
+                log_error("Order {$id} is not waiting for payment");
                 $this->addError('受注情報が存在しません');
                 return $this->redirectToRoute('shopping_error');
             }
