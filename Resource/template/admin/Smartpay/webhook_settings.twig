@@ -29,8 +29,7 @@ Possible states:
 3. [recreate] Already setup, but can't find the cooresponding webhook in API response. Create a new webhook.
 #}
 
-{% if state == 'create' %}
-{% elseif state == 'recreate' %}
+{% if ( state == 'create') or (state == 'recreate') %}
     <form role="form" method="post">
 
         {{ form_widget(form._token) }}
