@@ -290,8 +290,14 @@ class PaymentController extends AbstractShoppingController
             // Get Smartpay Order
             $smartpayOrder = $this->client->httpGet("/orders/{$smartpayOrderId}");
 
+            if (array_key_exists('reference', $smartpayOrder) && !empty($smartpayOrder['reference'])) {
+                $id = $smartpayOrder['reference'];
+            } else {
+                log_error("[Smartpay Webhook] Smartpay order reference not found, skipping...");
+                return new JsonResponse(['error' => 'Smartpay order reference not found.'], 200);
+            }
+
             // Check if the order is paid
-            $id = $smartpayOrder['reference'];
             if ($smartpayOrder['status'] != 'succeeded') {
                 log_error("[Smartpay Webhook] Smartpay order status is {$smartpayOrder['status']}, skipping...");
                 return new JsonResponse(['error' => 'Smartpay order status is not correct.'], 200);
