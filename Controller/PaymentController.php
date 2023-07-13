@@ -472,11 +472,7 @@ class PaymentController extends AbstractShoppingController
     {
         $base62 = new Base62(["characters" => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789']);
         $calculatedSignature = hash_hmac('sha256', $timestamp . "." . $body, $base62->decode($signingSecret));
-        if ($calculatedSignature == $signature) {
-            return true;
-        }
-
-        return false;
+        return $calculatedSignature == $signature;
     }
 
 }
