@@ -20,10 +20,13 @@ use Eccube\Util\StringUtil;
 use Plugin\Smartpay\Form\Type\Admin\Smartpay\ConfigType;
 use Plugin\Smartpay\Form\Type\Admin\Smartpay\APIKeys;
 use Plugin\Smartpay\Form\Type\Admin\Smartpay\CallbackURLs;
+use Plugin\Smartpay\Form\Type\Admin\Smartpay\WebhookURL;
 use Plugin\Smartpay\Repository\ConfigRepository;
+use Plugin\Smartpay\Client;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * Class ConfigController
@@ -38,9 +41,82 @@ class SmartpayController extends AbstractController
      */
     private $configRepository;
 
+    private $config;
+
+    private $client;
+
     public function __construct(ConfigRepository $configRepository)
     {
         $this->configRepository = $configRepository;
+        $this->config = $configRepository->get();
+        $this->client = new Client(null, null, $this->config->getAPIPrefix());
+    }
+
+    /**
+     * @param Request $request
+     * @param CacheUtil $cacheUtil
+     * @return array|\Symfony\Component\HttpFoundation\RedirectResponse
+     *
+     * @Route("/webhook_settings", name="smartpay_webhook_settings")
+     * @Template("@Smartpay/admin/Smartpay/webhook_settings.twig")
+     */
+    public function webhookSettings(Request $request, CacheUtil $cacheUtil)
+    {
+        $state = 'create';
+        $webhookId = getenv('SMARTPAY_WEBHOOK_ID');
+        if ($webhookId) {
+            try {
+                $webhook = $this->client->httpGet("/webhook-endpoints/$webhookId");
+                $state = 'created';
+            } catch (\Exception $e) {
+                log_error('Smartpay webhook fetch failed', [
+                    'error' => $e->getMessage(),
+                ]);
+                $this->addWarning('smartpay.admin.config.webhook_settings.recreate_webhook.warning', 'admin');
+                $state = 'recreate';
+            }
+        }
+        $form = $this->createForm(WebhookURL::class, [
+            'webhook_url' => $this->generateUrl('shopping_smartpay_payment_webhook', [], UrlGeneratorInterface::ABSOLUTE_URL)
+        ]);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $this->clearMessage();
+            $data = $form->getData();
+            $webhookUrl = $data['webhook_url'];
+            try {
+                $newWebhook = $this->client->httpPost("/webhook-endpoints", [
+                    'url' => $webhookUrl,
+                    'description' => 'Created by EC-CUBE Smartpay plugin',
+                    'eventSubscriptions' => [ 'order.authorized' ]
+                ]);
+                log_info('Smartpay webhook created', [
+                    'webhook' => $newWebhook
+                ]);
+                $this->replaceOrAddEnv([
+                    'SMARTPAY_WEBHOOK_ID' => $newWebhook['id'],
+                    'SMARTPAY_WEBHOOK_SECRET' => $newWebhook['signingSecret']
+                ]);
+
+                $cacheUtil->clearCache();
+
+                $this->addSuccess('admin.common.save_complete', 'admin');
+
+                return $this->redirectToRoute('smartpay_admin_config');
+            } catch (\Exception $e) {
+                log_error('Smartpay webhook creation failed', [
+                    'error' => $e->getMessage()
+                ]);
+                $this->addError('admin.common.save_error', 'admin');
+                return $this->redirectToRoute('smartpay_webhook_settings');
+            }
+        }
+
+        return [
+            'state' => $state,
+            'form' => $form->createView()
+        ];
     }
 
     /**
