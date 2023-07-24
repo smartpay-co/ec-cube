@@ -254,7 +254,7 @@ class PaymentController extends AbstractShoppingController
         $signingSecret  = getenv('SMARTPAY_WEBHOOK_SECRET');
         if (empty($webhookId) || empty($signingSecret)) {
             log_info("[Smartpay Webhook] signing id or secret not found, skipping...");
-            return new JsonResponse(['error' => 'Smartpay webhook is not setup yet.'], 200);
+            return new JsonResponse(['error' => 'Smartpay webhook is not setup yet.'], 404);
         }
 
         // Check if webhook request is valid
@@ -271,7 +271,7 @@ class PaymentController extends AbstractShoppingController
 
         if ($req_webhook_id !== $webhookId) {
             log_info("[Smartpay Webhook] webhook id mismatch, skipping...");
-            return new JsonResponse(['error' => 'Smartpay webhook id mismatch.'], 200);
+            return new JsonResponse(['error' => 'Smartpay webhook id mismatch.'], 404);
         }
 
         // validate request signature
