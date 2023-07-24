@@ -1,6 +1,6 @@
 {
   "name": "ec-cube/smartpay",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Smartpay for EC-CUBE4",
   "type": "eccube-plugin",
   "require": {
