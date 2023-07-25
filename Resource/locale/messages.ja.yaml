@@ -70,6 +70,8 @@ smartpay.admin.order.edit.payment_indent.label: "Smartpay ID"
 ## webhook
 smartpay.admin.config.webhook_settings.title: "Webhookの設定"
 smartpay.admin.config.webhook_settings.action: "Webhookを設定する"
+smartpay.admin.config.webhook_settings.configured: "設定済"
+smartpay.admin.config.webhook_settings.detail: "詳細"
 smartpay.admin.config.webhook_settings.setup_webhook.title: "Webhookの設定"
 smartpay.admin.config.webhook_settings.create_webhook.button: "Webhookを設定する"
 smartpay.admin.config.webhook_settings.create_webhook.description: "Webhookがまだ設定されていません。Webhookを設定すると、柔軟性が高まり、カスタマーエクスペリエンスが向上します。 <br />詳細は、以下をご参照ください。<a href='https://ja.docs.smartpay.co/reference/webhooks-overview'>Smartpay Documentation</a>."

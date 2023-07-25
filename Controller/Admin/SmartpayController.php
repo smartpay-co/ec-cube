@@ -115,7 +115,8 @@ class SmartpayController extends AbstractController
 
         return [
             'state' => $state,
-            'form' => $form->createView()
+            'form' => $form->createView(),
+            'webhook' => $webhook,
         ];
     }
 
@@ -219,6 +220,8 @@ class SmartpayController extends AbstractController
             'public_key' => getenv('SMARTPAY_PUBLIC_KEY'),
             'success_url' => getenv('SMARTPAY_CANCEL_URL'),
             'cancel_url' => getenv('SMARTPAY_SUCCESS_URL'),
+            'webhook_id' => getenv('SMARTPAY_WEBHOOK_ID'),
+
         ];
     }
 
