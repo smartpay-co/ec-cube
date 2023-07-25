@@ -64,6 +64,7 @@ class SmartpayController extends AbstractController
     {
         $state = 'create';
         $webhookId = getenv('SMARTPAY_WEBHOOK_ID');
+        $webhook = null;
         if ($webhookId) {
             try {
                 $webhook = $this->client->httpGet("/webhook-endpoints/$webhookId");
