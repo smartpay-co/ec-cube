@@ -87,10 +87,26 @@ Possible states:
                     <div class="card rounded border-0 mb-4">
                         <div class="card-header"><span>{{ 'smartpay.admin.config.webhook_settings.setup_webhook.title'|trans }}</span></div>
                         <div class="card-body">
-                            <div class="row mb-2">
+                            <div class="row mb-4">
                                 <div class="col-auto"><span>
                                 {{ 'smartpay.admin.config.webhook_settings.created_webhook.description'|trans|raw }}
                                 </span></div>
+                            </div>
+                            <div class="row">
+                                <div class="col-3">
+                                    <span>{{ 'Webhook ID'|trans }}</span>
+                                </div>
+                                <div class="col mb-2">
+                                    <input type="text" id="webhook_id" readonly="readonly" class="form-control" value="{{ webhook.id }}">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-3">
+                                    <span>{{ 'Webhook URL'|trans }}</span>
+                                </div>
+                                <div class="col mb-2">
+                                    <input type="text" id="webhook_url" readonly="readonly" class="form-control" value="{{ webhook.url }}">
+                                </div>
                             </div>
                         </div>
                     </div>

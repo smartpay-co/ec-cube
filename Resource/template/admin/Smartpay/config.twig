@@ -59,7 +59,14 @@
                             <div class="row">
                                 <div class="col-3"><span>{{ 'smartpay.admin.config.webhook_settings.title'|trans }}</span></div>
                                 <div class="col mb-2">
+                                    {% if webhook_id %}
+                                        <p>
+                                            <span style="margin-right: 5px;" class="badge badge-ec-green">{{ 'smartpay.admin.config.webhook_settings.configured'|trans }}</span>
+                                            <a href="{{ url('smartpay_webhook_settings') }}">{{ 'smartpay.admin.config.webhook_settings.detail'|trans }}</a>
+                                        </p>
+                                    {% else %}
                                         <p><a href="{{ url('smartpay_webhook_settings') }}">{{ 'smartpay.admin.config.webhook_settings.action'|trans }}</a></p>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
